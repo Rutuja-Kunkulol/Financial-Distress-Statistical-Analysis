@@ -1,0 +1,159 @@
+### You should use your working directory to load data file  ###
+###Click: Session-->Set Working Directory-->To Source File Location
+
+##############################################################
+###  Bankruptcy data ####
+##############################################################
+rm(list = ls()) # clear memory
+par(mfrow = c(1, 1))
+
+###1.  two-sample t-test
+
+da=read.csv("HWFAILED.csv",header=T)
+attach(da)
+head(da)
+#yd     = "Distress Dummy"
+#tdta   = "Debt to Assets"
+#gempl  = "Employee Growth Rate" 
+#opita  = "Op. Income to Assets"
+#invsls = "Inventory to Sales" 
+#lsls   = "Log of Sales" 
+#lta    = "Log of Assets" 
+#nwcta  = "Net Working Cap to Assets"
+#cacl   = "Current Assets to Current Liab" 
+#qacl   = "Quick Assets to Current Liab" 
+#ebita  = "EBIT to Assets" 
+#reta   = "Retained Earnings to Assets" 
+#fata   = "Fixed Assets to Assets"
+
+
+# t-test for explanatory variables by groups
+
+# let's test tdta variable
+plot(tdta ~ yd, data = da)#<--plot to see how tdta is separated into two groups: yd=0 and yd=1
+t.test(tdta ~ yd, data = da) 
+#results above show t = -6.1, p-value = 0 
+#p-value<5%. We reject the Null hypothesis of equal mean for group 0 (healthy firms) and group 1 (bankrupt firms)
+#We find that bankrupt firms had higher tdta (Debt ratio) 
+# Bakrupt firms on average had Debt ratio=0.658, healthy firms =0.469. The difference is 
+#highly statistically significant based on the large t value and small p-value, 
+#indicating that Debt is an important predictor for distress/bankruptcy.
+
+##############################################################
+
+# t-test for gempl and opita
+# Run two line below  and explain results
+t.test(gempl ~ yd, data = da) 
+t.test(opita ~ yd, data = da) 
+
+###2. Logit analysis 
+
+logit<- glm(yd~tdta+gempl+opita+invsls+lsls,data=da, family=binomial (link = "logit"))
+library("lmtest")
+library("sandwich")
+VCOV=vcovHC(logit, type="HC") #in the package Sandwich was used to correct for Heteroscedasticity
+coeftest(logit, vcov. = VCOV) #<--print out corrected standard errors and tstats
+
+#Marginal Effects
+Y=yd
+X=cbind(tdta,gempl,opita,invsls,lsls)
+# Logit and PROBIT models marginal effects
+library(mfx)
+mlogit=logitmfx(formula=Y ~ X, data=da, atmean = FALSE, robust = FALSE)
+mlogit
+
+
+# Number of correctly predicted values for Non-Bankrupt (Y=0) and Bankrupt (Y=1) firms
+b=table(true = Y, pred = round(fitted(logit)))
+b
+#logit percent correctly predicted Y=0
+b[1,1]/(sum(Y==0))
+#logit percent correctly predicted Y=1
+b[2,2]/(sum(Y==1))
+
+
+##############################################################
+### 3. Monte Carlo Simulations ####
+### for portfolio of GOOG and AAPL actual returns
+##############################################################
+rm(list = ls()) # clear memory
+par(mfrow = c(1, 1))
+
+# Replace GOOG and AAPL below with any other two stocks 
+# Search finance.yahoo.com for two stock tickers to replace AAPL and GOOG
+
+library(quantmod)  # <=== load the package "quantmod"
+library(timeSeries)
+getSymbols("AAPL",from="2010-01-01",to="2018-08-13") # <== specify the data span
+getSymbols("GOOG",from="2010-01-01",to="2018-08-13") # <== specify the data span
+AAPL=last(AAPL, "4 years") # select the last 4 years of data
+GOOG=last(GOOG, "4 years") # select the last 4 years of data
+
+ret_AAPL=diff(log(AAPL$AAPL.Adjusted))*100 # returns are in percentage 
+ret_GOOG=diff(log(GOOG$GOOG.Adjusted))*100 # returns are in percentage 
+ret_AAPL=na.omit(ret_AAPL) # remove missing values NA
+ret_GOOG=na.omit(ret_GOOG) # remove missing values NA
+
+
+
+nsim=10000
+w=c(0.6,0.4) #portfolio weights
+# mean returns could be included or ignored
+#mu=cbind( mean(ret_GOOG),mean(ret_AAPL))
+mu=c(0,0)
+# daily covariance matrix
+SIG=cov(cbind(ret_GOOG,ret_AAPL)) # covariance between GOOG and AAPL
+SIG
+# Correlation between GOOG and AAPL
+cor(cbind(ret_GOOG,ret_AAPL)) 
+
+plot(as.data.frame(cbind(ret_GOOG,ret_AAPL))) #scatterplot
+plot(cbind(ret_GOOG,ret_AAPL)) #plot over time
+
+library(MASS)
+set.seed(12345) #set seed so that monte carlo simulations are the same each time you run the code
+sim_returns=mvrnorm(nsim,mu,SIG) # generate nsim=10000 scenarios for two stocks
+sim_portfolio= sim_returns%*%w  #compute portfolio returns for nsim scenarios
+
+# Find VaR for $1,000,000 portfolio
+value=1000000
+VaR=-quantile(sim_portfolio,p=0.01)/100*value # divide by 100 since returns are in percentage
+VaR
+
+
+##############################################################
+#### 4. Extra Credit  Bayesian Linear Regression for  “Multifactor case study"####
+##############################################################
+rm(list = ls()) # clear memory
+par(mfrow = c(1, 1))
+
+da = read.csv("multifactor.csv",header=T)  #<== Load data with header into R
+head(da)  # <== Print out the first 6 rows of the data object "da".
+attach(da)
+########GLCGX Fund##########
+r_glcgx=GLCGX-TBills # excess return for GLCGX
+rm=Market-TBills #excess return for the market
+
+
+###Check Classical Linear Regression
+require(graphics)
+m1=lm(r_glcgx~rm)  # CAPM MODEL with one regressor
+summary(m1)
+m2=lm(r_glcgx~rm+HML+SMB+MOM) #Multifactor model
+summary(m2)
+
+
+### Bayesian MCMC for Linear Regression
+library(MCMCpack)
+#?MCMCregress
+
+posterior1=MCMCregress(r_glcgx~rm,data=da) # CAPM MODEL with one regressor
+summary(posterior1)
+plot(posterior1)
+
+posterior2=MCMCregress(r_glcgx~rm+HML+SMB+MOM,data=da) #Multifactor model
+summary(posterior2)
+plot(posterior2)
+
+
+
