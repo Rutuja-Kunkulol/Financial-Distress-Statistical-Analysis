@@ -37,8 +37,4 @@ To replicate this analysis, you will need R and the associated packages used in 
 ## Contributing
 Contributions to this project are welcome. Please refer to the contributing guidelines for more information.
 
-## Contact Information
-For any further questions or feedback, feel free to reach out at [your-email@example.com].
 
-## License
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE) file for details.
